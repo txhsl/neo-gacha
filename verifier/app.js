@@ -1,13 +1,28 @@
 import { rpc } from "@cityofzion/neon-js";
 import express from 'express';
+import cors from "cors";
+import md5 from "js-md5";
+import url from "url";
+import { request } from "http";
 
 const app = express()
 app.use(express.json());
+app.use(cors());
 
-const url = 'http://seed2.neo.org:20332';
-const client = new rpc.RPCClient(url);
+// Neo node
+const rpcUrl = 'http://seed2.neo.org:20332';
+const client = new rpc.RPCClient(rpcUrl);
 const contract = '0x1a79316efa784177bde4de0f3690cdd2488ed009';
 const event = 'Twist';
+
+// Gacha http
+const apiUrl = 'http://har.api.yishouxia.cn/APIv2/Service.aspx'
+const apiKey = '89747cb3a992424ba9869567e22a810e';
+const sign = 'Vr8%RI2opxxO@F5c';
+
+const action = 'PayOut';
+const deviceName = '4GC30223';
+const coinCount = 1;
 
 app.listen(8080, () => {
     console.log('Express server running at http://127.0.0.1');
@@ -18,16 +33,30 @@ app.get('/', (req, res) => {
 })
 
 app.post('/verify', async (req, res) => {
-    let sender = req.body.account;
-    let id = req.body.tx_id;
-    let result = await checkResult(sender, id);
+    const sender = req.body.account;
+    const id = req.body.tx_id;
 
-    res.json({ 'result': result, 'gacha': false});
+    // Check the tx sender, event and vm stack
+    const result = await checkResult(sender, id);
+
+    if (result) {
+        // Request a machine gacha
+        const gacha = await requestGacha(id);
+        if (gacha.recode === 0) {
+            res.json({ 'result': result, 'gacha': gacha });
+        }
+        else {
+            res.json({ 'result': !result, 'gacha': gacha });
+        }
+    }
+    else {
+        res.json({ 'result': false });
+    }
 })
 
 const checkResult = async (sender, id) => {
     let lastBlockHeight = await client.getBlockCount() - 2;
-    const topBlockHeight = lastBlockHeight + 6;
+    const topBlockHeight = lastBlockHeight + 4;
     while (true) {
         const newBlockHeight = await client.getBlockCount();
         while (lastBlockHeight < newBlockHeight) {
@@ -53,10 +82,41 @@ const checkResult = async (sender, id) => {
         if (newBlockHeight >= topBlockHeight) {
             return false;
         }
-        await sleep(10000);
+        await sleep(5000);
     }
 }
 
 const sleep = (time) => {
     return new Promise((resolve) => setTimeout(resolve, time));
+}
+
+const requestGacha = (id) => {
+    const signData = 'action='+action+'&api_key='+apiKey+'&coin_count='+coinCount.toString()+'&device_name='+deviceName+'&order_id='+id+'&sign='+sign;
+    const signValue = md5(signData).toUpperCase();
+
+    const postData = {
+        action: action,
+        api_key: apiKey,
+        device_name: deviceName,
+        order_id: id,
+        coin_count: coinCount,
+        sign: signValue
+    };
+
+    const postOptions = url.parse(apiUrl);
+    postOptions.method = 'POST';
+
+    return new Promise((resolve) => {
+        const req = request(postOptions, (res) => {
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => {
+                const data = JSON.parse(chunk);
+                resolve(data);
+            });
+        });
+        req.setTimeout(6000);
+        console.log(JSON.stringify(postData));
+        req.write(JSON.stringify(postData), 'utf8');
+        req.end();
+    });
 }
