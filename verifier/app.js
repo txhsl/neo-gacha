@@ -51,7 +51,7 @@ app.post('/verify', async (req, res) => {
 
     if (result) {
         // Request a machine gacha
-        const gacha = await requestGacha(id);
+        const gacha = await requestGacha(md5(id).toUpperCase());
         if (gacha.recode === 0) {
             res.json({ 'result': result, 'gacha': gacha });
         }
