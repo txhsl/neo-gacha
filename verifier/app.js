@@ -27,7 +27,7 @@ const apiKey = '89747cb3a992424ba9869567e22a810e';
 const sign = 'Vr8%RI2opxxO@F5c';
 
 const action = 'PayOut';
-const deviceName = '4GC30223';
+const deviceName = '4G90838';
 const coinCount = 1;
 
 app.listen(8080, () => {
